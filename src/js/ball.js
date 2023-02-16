@@ -46,11 +46,13 @@ class Ball extends EventEmitter {
       right: pos.x + radius,
       top: pos.y - radius,
       bottom: pos.y + radius,
+      x: pos.x,
+      y: pos.y
     };
 
     if (this.#player1.isHit(bounds) || this.#player2.isHit(bounds)) {
       this.#direction.x *= -1;
-      this.#direction.y *= -1;
+      //this.#direction.y *= -1;
       
       this.emit("bounce");
     }

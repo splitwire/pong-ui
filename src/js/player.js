@@ -59,7 +59,8 @@ class Player {
       bottom: pos.y + Player.#playerHeight
     };
 
-    if (coordinates.top <= bounds.top && coordinates.bottom <= bounds.bottom) {
+
+    if (bounds.top <= coordinates.y && coordinates.y <= bounds.bottom) {
       return (this.#side === "left")
         ? coordinates.left <= bounds.right
         : bounds.left <= coordinates.right;
