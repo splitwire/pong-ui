@@ -25,14 +25,22 @@ class Game {
   initialize() {
     if (!this.#field) this.#field = new Field(this.#canvas);
 
-    if (!this.#player1) this.#player1 = new Player(this.#canvas, "left");
-    if (!this.#player2) this.#player2 = new Player(this.#canvas, "right");
+    if (!this.#player1)
+      this.#player1 = new Player(this.#canvas, "left");
+    
+    if (!this.#player2)
+      this.#player2 = new Player(this.#canvas, "right");
 
-    if (!this.#ball) this.#ball = new Ball(this.#canvas);
+    
+    if (!this.#ball) {
+      this.#ball = new Ball(this.#canvas, this.#player1, this.#player2);
 
+      this.#ball.on("loss", (event) => {
+        cancelAnimationFrame(this.#animationID);
+      });
+    }
+    
     this.#animationID = null;
-
-    console.log(this.#player1.position);
     
     this.animate();
   }
@@ -40,12 +48,16 @@ class Game {
   animate() {
     this.#animationID = requestAnimationFrame(this.animate.bind(this));
 
+    this.draw();
+  }
+
+  draw() {
     this.#field.draw();
 
     this.#player1.draw();
     this.#player2.draw();
 
-    this.#ball.draw(this.#player1, this.#player2);
+    this.#ball.draw();
   }
 }
 

@@ -44,6 +44,7 @@ class Field {
     ctx.moveTo(middle + radius, center);
     ctx.arc(middle, center, radius, 0, 2 * Math.PI);
     ctx.stroke();
+    ctx.closePath();
   }
 
   draw() {

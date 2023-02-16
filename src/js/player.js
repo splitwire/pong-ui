@@ -14,7 +14,7 @@ class Player {
   constructor(canvas, side) {
     this.#canvas = canvas;
     this.#ctx = canvas.getContext("2d");
-    this.#side = side;
+    this.#side = side.toLowerCase();
 
     this.initialize();
   }
@@ -27,7 +27,7 @@ class Player {
   //----------------
   initialize() {
     this.#position.y = this.#canvas.height / 2;
-    this.#position.x = (this.#side.toLowerCase() === "left")
+    this.#position.x = (this.#side === "left")
       ? 0
       : this.#canvas.width - Player.#playerWidth;
     
@@ -48,6 +48,27 @@ class Player {
       }.bind(this));
   }
 
+  //----------------
+  isHit(coordinates) {
+    const pos = this.#position;
+
+    const bounds = {
+      left: pos.x,
+      right: pos.x + Player.#playerWidth,
+      top: pos.y,
+      bottom: pos.y + Player.#playerHeight
+    };
+
+    if (coordinates.top <= bounds.top && coordinates.bottom <= bounds.bottom) {
+      return (this.#side === "left")
+        ? coordinates.left <= bounds.right
+        : bounds.left <= coordinates.right;
+    }
+
+    return false;
+  }
+
+  //----------------
   move() {
     const pos = this.#position;
  
@@ -75,6 +96,7 @@ class Player {
     ctx.rect(pos.x, pos.y - offset, Player.#playerWidth, height);
     ctx.fillStyle = Player.#playerColor;
     ctx.fill();
+    ctx.closePath();
   }
 }
 

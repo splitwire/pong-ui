@@ -579,27 +579,37 @@ class Game {
         if (!this.#field) this.#field = new Field(this.#canvas);
         if (!this.#player1) this.#player1 = new Player(this.#canvas, "left");
         if (!this.#player2) this.#player2 = new Player(this.#canvas, "right");
-        if (!this.#ball) this.#ball = new Ball(this.#canvas);
+        if (!this.#ball) {
+            this.#ball = new Ball(this.#canvas, this.#player1, this.#player2);
+            this.#ball.on("loss", (event)=>{
+                cancelAnimationFrame(this.#animationID);
+            });
+        }
         this.#animationID = null;
-        console.log(this.#player1.position);
         this.animate();
     }
     animate() {
         this.#animationID = requestAnimationFrame(this.animate.bind(this));
+        this.draw();
+    }
+    draw() {
         this.#field.draw();
         this.#player1.draw();
         this.#player2.draw();
-        this.#ball.draw(this.#player1, this.#player2);
+        this.#ball.draw();
     }
 }
 const game = new Game("pong");
 
 },{"ac3c1562c6996374":"hMVTW","19705b4963c7095b":"ep9Uy","d8beaedf91f89f23":"2k4ca"}],"hMVTW":[function(require,module,exports) {
-class Ball {
+const EventEmitter = require("6d9f33fc020e12fe");
+class Ball extends EventEmitter {
     static #ballRadius = 20;
     static #ballColor = "red";
     #canvas;
     #ctx;
+    #player1;
+    #player2;
     #position = {
         x: 0,
         y: 0
@@ -609,12 +619,18 @@ class Ball {
         y: 0
     };
     #speed = 4;
-    constructor(canvas){
+    constructor(canvas, player1, player2){
+        super();
         this.#canvas = canvas;
         this.#ctx = canvas.getContext("2d");
+        this.#player1 = player1;
+        this.#player2 = player2;
         this.initialize();
     }
     initialize() {
+        this.reset();
+    }
+    reset() {
         this.#position.x = this.#canvas.width / 2;
         this.#position.y = this.#canvas.height / 2;
         this.#direction.x = Math.round(Math.random()) === 1 ? 1 : -1;
@@ -630,8 +646,22 @@ class Ball {
             top: pos.y - radius,
             bottom: pos.y + radius
         };
-        if (bounds.left <= 0 || bounds.right > canvas.width) this.#direction.x *= -1;
-        if (bounds.top < 0 || bounds.bottom > canvas.height) this.#direction.y *= -1;
+        if (this.#player1.isHit(bounds) || this.#player2.isHit(bounds)) {
+            this.#direction.x *= -1;
+            this.#direction.y *= -1;
+            this.emit("bounce");
+        } else {
+            if (bounds.left <= 0 || bounds.right > canvas.width) {
+                this.#direction.x = 0;
+                this.#direction.y = 0;
+                this.emit("loss");
+                return false;
+            }
+            if (bounds.top < 0 || bounds.bottom > canvas.height) {
+                this.#direction.y *= -1;
+                this.emit("bounce");
+            }
+        }
         pos.x += this.#direction.x * this.#speed;
         pos.y += this.#direction.y * this.#speed;
     }
@@ -643,9 +673,365 @@ class Ball {
         ctx.arc(pos.x, pos.y, Ball.#ballRadius, 0, 2 * Math.PI);
         ctx.fillStyle = Ball.#ballColor;
         ctx.fill();
+        ctx.closePath();
     }
 }
 module.exports = Ball;
+
+},{"6d9f33fc020e12fe":"1VQLm"}],"1VQLm":[function(require,module,exports) {
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+"use strict";
+var R = typeof Reflect === "object" ? Reflect : null;
+var ReflectApply = R && typeof R.apply === "function" ? R.apply : function ReflectApply(target, receiver, args) {
+    return Function.prototype.apply.call(target, receiver, args);
+};
+var ReflectOwnKeys;
+if (R && typeof R.ownKeys === "function") ReflectOwnKeys = R.ownKeys;
+else if (Object.getOwnPropertySymbols) ReflectOwnKeys = function ReflectOwnKeys(target) {
+    return Object.getOwnPropertyNames(target).concat(Object.getOwnPropertySymbols(target));
+};
+else ReflectOwnKeys = function ReflectOwnKeys(target) {
+    return Object.getOwnPropertyNames(target);
+};
+function ProcessEmitWarning(warning) {
+    if (console && console.warn) console.warn(warning);
+}
+var NumberIsNaN = Number.isNaN || function NumberIsNaN(value) {
+    return value !== value;
+};
+function EventEmitter() {
+    EventEmitter.init.call(this);
+}
+module.exports = EventEmitter;
+module.exports.once = once;
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._eventsCount = 0;
+EventEmitter.prototype._maxListeners = undefined;
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+var defaultMaxListeners = 10;
+function checkListener(listener) {
+    if (typeof listener !== "function") throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+}
+Object.defineProperty(EventEmitter, "defaultMaxListeners", {
+    enumerable: true,
+    get: function() {
+        return defaultMaxListeners;
+    },
+    set: function(arg) {
+        if (typeof arg !== "number" || arg < 0 || NumberIsNaN(arg)) throw new RangeError('The value of "defaultMaxListeners" is out of range. It must be a non-negative number. Received ' + arg + ".");
+        defaultMaxListeners = arg;
+    }
+});
+EventEmitter.init = function() {
+    if (this._events === undefined || this._events === Object.getPrototypeOf(this)._events) {
+        this._events = Object.create(null);
+        this._eventsCount = 0;
+    }
+    this._maxListeners = this._maxListeners || undefined;
+};
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
+    if (typeof n !== "number" || n < 0 || NumberIsNaN(n)) throw new RangeError('The value of "n" is out of range. It must be a non-negative number. Received ' + n + ".");
+    this._maxListeners = n;
+    return this;
+};
+function _getMaxListeners(that) {
+    if (that._maxListeners === undefined) return EventEmitter.defaultMaxListeners;
+    return that._maxListeners;
+}
+EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
+    return _getMaxListeners(this);
+};
+EventEmitter.prototype.emit = function emit(type) {
+    var args = [];
+    for(var i = 1; i < arguments.length; i++)args.push(arguments[i]);
+    var doError = type === "error";
+    var events = this._events;
+    if (events !== undefined) doError = doError && events.error === undefined;
+    else if (!doError) return false;
+    // If there is no 'error' event listener then throw.
+    if (doError) {
+        var er;
+        if (args.length > 0) er = args[0];
+        if (er instanceof Error) // Note: The comments on the `throw` lines are intentional, they show
+        // up in Node's output if this results in an unhandled exception.
+        throw er; // Unhandled 'error' event
+        // At least give some kind of context to the user
+        var err = new Error("Unhandled error." + (er ? " (" + er.message + ")" : ""));
+        err.context = er;
+        throw err; // Unhandled 'error' event
+    }
+    var handler = events[type];
+    if (handler === undefined) return false;
+    if (typeof handler === "function") ReflectApply(handler, this, args);
+    else {
+        var len = handler.length;
+        var listeners = arrayClone(handler, len);
+        for(var i = 0; i < len; ++i)ReflectApply(listeners[i], this, args);
+    }
+    return true;
+};
+function _addListener(target, type, listener, prepend) {
+    var m;
+    var events;
+    var existing;
+    checkListener(listener);
+    events = target._events;
+    if (events === undefined) {
+        events = target._events = Object.create(null);
+        target._eventsCount = 0;
+    } else {
+        // To avoid recursion in the case that type === "newListener"! Before
+        // adding it to the listeners, first emit "newListener".
+        if (events.newListener !== undefined) {
+            target.emit("newListener", type, listener.listener ? listener.listener : listener);
+            // Re-assign `events` because a newListener handler could have caused the
+            // this._events to be assigned to a new object
+            events = target._events;
+        }
+        existing = events[type];
+    }
+    if (existing === undefined) {
+        // Optimize the case of one listener. Don't need the extra array object.
+        existing = events[type] = listener;
+        ++target._eventsCount;
+    } else {
+        if (typeof existing === "function") // Adding the second element, need to change to array.
+        existing = events[type] = prepend ? [
+            listener,
+            existing
+        ] : [
+            existing,
+            listener
+        ];
+        else if (prepend) existing.unshift(listener);
+        else existing.push(listener);
+        // Check for listener leak
+        m = _getMaxListeners(target);
+        if (m > 0 && existing.length > m && !existing.warned) {
+            existing.warned = true;
+            // No error code for this since it is a Warning
+            // eslint-disable-next-line no-restricted-syntax
+            var w = new Error("Possible EventEmitter memory leak detected. " + existing.length + " " + String(type) + " listeners " + "added. Use emitter.setMaxListeners() to " + "increase limit");
+            w.name = "MaxListenersExceededWarning";
+            w.emitter = target;
+            w.type = type;
+            w.count = existing.length;
+            ProcessEmitWarning(w);
+        }
+    }
+    return target;
+}
+EventEmitter.prototype.addListener = function addListener(type, listener) {
+    return _addListener(this, type, listener, false);
+};
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+EventEmitter.prototype.prependListener = function prependListener(type, listener) {
+    return _addListener(this, type, listener, true);
+};
+function onceWrapper() {
+    if (!this.fired) {
+        this.target.removeListener(this.type, this.wrapFn);
+        this.fired = true;
+        if (arguments.length === 0) return this.listener.call(this.target);
+        return this.listener.apply(this.target, arguments);
+    }
+}
+function _onceWrap(target, type, listener) {
+    var state = {
+        fired: false,
+        wrapFn: undefined,
+        target: target,
+        type: type,
+        listener: listener
+    };
+    var wrapped = onceWrapper.bind(state);
+    wrapped.listener = listener;
+    state.wrapFn = wrapped;
+    return wrapped;
+}
+EventEmitter.prototype.once = function once(type, listener) {
+    checkListener(listener);
+    this.on(type, _onceWrap(this, type, listener));
+    return this;
+};
+EventEmitter.prototype.prependOnceListener = function prependOnceListener(type, listener) {
+    checkListener(listener);
+    this.prependListener(type, _onceWrap(this, type, listener));
+    return this;
+};
+// Emits a 'removeListener' event if and only if the listener was removed.
+EventEmitter.prototype.removeListener = function removeListener(type, listener) {
+    var list, events, position, i, originalListener;
+    checkListener(listener);
+    events = this._events;
+    if (events === undefined) return this;
+    list = events[type];
+    if (list === undefined) return this;
+    if (list === listener || list.listener === listener) {
+        if (--this._eventsCount === 0) this._events = Object.create(null);
+        else {
+            delete events[type];
+            if (events.removeListener) this.emit("removeListener", type, list.listener || listener);
+        }
+    } else if (typeof list !== "function") {
+        position = -1;
+        for(i = list.length - 1; i >= 0; i--)if (list[i] === listener || list[i].listener === listener) {
+            originalListener = list[i].listener;
+            position = i;
+            break;
+        }
+        if (position < 0) return this;
+        if (position === 0) list.shift();
+        else spliceOne(list, position);
+        if (list.length === 1) events[type] = list[0];
+        if (events.removeListener !== undefined) this.emit("removeListener", type, originalListener || listener);
+    }
+    return this;
+};
+EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
+EventEmitter.prototype.removeAllListeners = function removeAllListeners(type) {
+    var listeners, events, i;
+    events = this._events;
+    if (events === undefined) return this;
+    // not listening for removeListener, no need to emit
+    if (events.removeListener === undefined) {
+        if (arguments.length === 0) {
+            this._events = Object.create(null);
+            this._eventsCount = 0;
+        } else if (events[type] !== undefined) {
+            if (--this._eventsCount === 0) this._events = Object.create(null);
+            else delete events[type];
+        }
+        return this;
+    }
+    // emit removeListener for all listeners on all events
+    if (arguments.length === 0) {
+        var keys = Object.keys(events);
+        var key;
+        for(i = 0; i < keys.length; ++i){
+            key = keys[i];
+            if (key === "removeListener") continue;
+            this.removeAllListeners(key);
+        }
+        this.removeAllListeners("removeListener");
+        this._events = Object.create(null);
+        this._eventsCount = 0;
+        return this;
+    }
+    listeners = events[type];
+    if (typeof listeners === "function") this.removeListener(type, listeners);
+    else if (listeners !== undefined) // LIFO order
+    for(i = listeners.length - 1; i >= 0; i--)this.removeListener(type, listeners[i]);
+    return this;
+};
+function _listeners(target, type, unwrap) {
+    var events = target._events;
+    if (events === undefined) return [];
+    var evlistener = events[type];
+    if (evlistener === undefined) return [];
+    if (typeof evlistener === "function") return unwrap ? [
+        evlistener.listener || evlistener
+    ] : [
+        evlistener
+    ];
+    return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
+}
+EventEmitter.prototype.listeners = function listeners(type) {
+    return _listeners(this, type, true);
+};
+EventEmitter.prototype.rawListeners = function rawListeners(type) {
+    return _listeners(this, type, false);
+};
+EventEmitter.listenerCount = function(emitter, type) {
+    if (typeof emitter.listenerCount === "function") return emitter.listenerCount(type);
+    else return listenerCount.call(emitter, type);
+};
+EventEmitter.prototype.listenerCount = listenerCount;
+function listenerCount(type) {
+    var events = this._events;
+    if (events !== undefined) {
+        var evlistener = events[type];
+        if (typeof evlistener === "function") return 1;
+        else if (evlistener !== undefined) return evlistener.length;
+    }
+    return 0;
+}
+EventEmitter.prototype.eventNames = function eventNames() {
+    return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
+};
+function arrayClone(arr, n) {
+    var copy = new Array(n);
+    for(var i = 0; i < n; ++i)copy[i] = arr[i];
+    return copy;
+}
+function spliceOne(list, index) {
+    for(; index + 1 < list.length; index++)list[index] = list[index + 1];
+    list.pop();
+}
+function unwrapListeners(arr) {
+    var ret = new Array(arr.length);
+    for(var i = 0; i < ret.length; ++i)ret[i] = arr[i].listener || arr[i];
+    return ret;
+}
+function once(emitter, name) {
+    return new Promise(function(resolve, reject) {
+        function errorListener(err) {
+            emitter.removeListener(name, resolver);
+            reject(err);
+        }
+        function resolver() {
+            if (typeof emitter.removeListener === "function") emitter.removeListener("error", errorListener);
+            resolve([].slice.call(arguments));
+        }
+        eventTargetAgnosticAddListener(emitter, name, resolver, {
+            once: true
+        });
+        if (name !== "error") addErrorHandlerIfEventEmitter(emitter, errorListener, {
+            once: true
+        });
+    });
+}
+function addErrorHandlerIfEventEmitter(emitter, handler, flags) {
+    if (typeof emitter.on === "function") eventTargetAgnosticAddListener(emitter, "error", handler, flags);
+}
+function eventTargetAgnosticAddListener(emitter, name, listener, flags) {
+    if (typeof emitter.on === "function") {
+        if (flags.once) emitter.once(name, listener);
+        else emitter.on(name, listener);
+    } else if (typeof emitter.addEventListener === "function") // EventTarget does not have `error` event semantics like Node
+    // EventEmitters, we do not listen for `error` events here.
+    emitter.addEventListener(name, function wrapListener(arg) {
+        // IE does not have builtin `{ once: true }` support so we
+        // have to do it manually.
+        if (flags.once) emitter.removeEventListener(name, wrapListener);
+        listener(arg);
+    });
+    else throw new TypeError('The "emitter" argument must be of type EventEmitter. Received type ' + typeof emitter);
+}
 
 },{}],"ep9Uy":[function(require,module,exports) {
 class Field {
@@ -682,6 +1068,7 @@ class Field {
         ctx.moveTo(middle + radius, center);
         ctx.arc(middle, center, radius, 0, 2 * Math.PI);
         ctx.stroke();
+        ctx.closePath();
     }
     draw() {
         this.clear();
@@ -708,7 +1095,7 @@ class Player {
     constructor(canvas, side){
         this.#canvas = canvas;
         this.#ctx = canvas.getContext("2d");
-        this.#side = side;
+        this.#side = side.toLowerCase();
         this.initialize();
     }
     //----------------
@@ -718,7 +1105,7 @@ class Player {
     //----------------
     initialize() {
         this.#position.y = this.#canvas.height / 2;
-        this.#position.x = this.#side.toLowerCase() === "left" ? 0 : this.#canvas.width - Player.#playerWidth;
+        this.#position.x = this.#side === "left" ? 0 : this.#canvas.width - Player.#playerWidth;
         document.addEventListener("keydown", (function(evt) {
             if (evt.key.toLowerCase() === "arrowup") this.#direction = -1;
             else if (evt.key.toLowerCase() === "arrowdown") this.#direction = 1;
@@ -727,6 +1114,19 @@ class Player {
             this.#direction = 0;
         }).bind(this));
     }
+    //----------------
+    isHit(coordinates) {
+        const pos = this.#position;
+        const bounds = {
+            left: pos.x,
+            right: pos.x + Player.#playerWidth,
+            top: pos.y,
+            bottom: pos.y + Player.#playerHeight
+        };
+        if (coordinates.top <= bounds.top && coordinates.bottom <= bounds.bottom) return this.#side === "left" ? coordinates.left <= bounds.right : bounds.left <= coordinates.right;
+        return false;
+    }
+    //----------------
     move() {
         const pos = this.#position;
         pos.y += this.#direction * this.#speed;
@@ -744,6 +1144,7 @@ class Player {
         ctx.rect(pos.x, pos.y - offset, Player.#playerWidth, height);
         ctx.fillStyle = Player.#playerColor;
         ctx.fill();
+        ctx.closePath();
     }
 }
 module.exports = Player;
